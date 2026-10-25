@@ -1,0 +1,6 @@
+{
+  "name": "FireChat App Download",
+  "description": "Production-ready Android APK download platform for FireChat with verified APK delivery, secure atomic download tracking, and admin catalog management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

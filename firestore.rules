@@ -1,0 +1,117 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny all unmapped paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedEmail() && (
+        request.auth.token.email.lower() == 'ommarwin20241998@gmail.com' ||
+        request.auth.token.email.lower() == 'kkkk90493@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidSha256(hash) {
+      return hash is string && hash.size() == 64 && hash.matches('^[a-fA-F0-9]{64}$');
+    }
+
+    function isValidApp(data) {
+      return data.keys().hasAll(['id', 'name', 'packageName', 'version', 'description', 'category', 'fileSize', 'sha256', 'isPublished', 'downloadCount', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.packageName is string && data.packageName.size() >= 3 && data.packageName.size() <= 120 && data.packageName.matches('^[a-zA-Z0-9_\\.]+$') &&
+        data.version is string && data.version.size() >= 1 && data.version.size() <= 32 &&
+        data.description is string && data.description.size() >= 5 && data.description.size() <= 3000 &&
+        data.category in ['Messaging', 'Tools', 'Beta Releases', 'Enterprise', 'Add-ons', 'Productivity'] &&
+        data.fileSize is number && data.fileSize >= 0 &&
+        isValidSha256(data.sha256) &&
+        data.isPublished is bool &&
+        data.downloadCount is number && data.downloadCount >= 0 &&
+        data.createdAt is string &&
+        data.updatedAt is string;
+    }
+
+    function isValidDownloadEvent(data) {
+      return data.keys().hasAll(['id', 'appId', 'idempotencyKey', 'status', 'timestamp']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.appId is string && data.appId.size() <= 128 && data.appId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.idempotencyKey is string && data.idempotencyKey.size() >= 8 && data.idempotencyKey.size() <= 128 &&
+        data.status in ['completed', 'failed', 'cancelled'] &&
+        data.timestamp is string;
+    }
+
+    // Apps catalog
+    match /apps/{appId} {
+      // Public users can read only published apps; Admins can read all apps (drafts & published)
+      allow get: if isValidId(appId) && (isAdmin() || (resource != null && resource.data.isPublished == true));
+      allow list: if isAdmin() || resource.data.isPublished == true;
+
+      // Only administrators can create or delete apps
+      allow create: if isValidId(appId) && isAdmin() && isValidApp(incoming());
+      allow delete: if isValidId(appId) && isAdmin();
+
+      // Updates:
+      // Case 1: Full administrative edits
+      // Case 2: Atomic download counter increment by verified download completion
+      allow update: if isValidId(appId) && (
+        (isAdmin() && isValidApp(incoming()) && incoming().createdAt == existing().createdAt) ||
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['downloadCount', 'updatedAt']) &&
+          incoming().downloadCount == existing().downloadCount + 1 &&
+          existing().isPublished == true
+        )
+      );
+
+      // Nested version releases
+      match /versions/{versionId} {
+        allow get: if isValidId(versionId) && (isAdmin() || (resource != null && resource.data.isPublished == true));
+        allow list: if isAdmin() || resource.data.isPublished == true;
+        allow create, update, delete: if isValidId(versionId) && isAdmin();
+      }
+    }
+
+    // Download events for atomic download auditing and analytics
+    match /download_events/{eventId} {
+      allow get: if isValidId(eventId) && isAdmin();
+      allow list: if isAdmin();
+      
+      // Anyone completing a download can log a valid event with an idempotencyKey
+      allow create: if isValidId(eventId) && isValidDownloadEvent(incoming());
+      
+      // Immutable log: no client edits or deletes permitted
+      allow update: if false;
+      allow delete: if isValidId(eventId) && isAdmin();
+    }
+
+    // Admin authorization list
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

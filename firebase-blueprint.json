@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "App": {
+      "title": "App",
+      "description": "Android APK application listing published to catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "packageName": { "type": "string", "minLength": 3, "maxLength": 120, "pattern": "^[a-zA-Z0-9_\\.]+$" },
+        "version": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "versionCode": { "type": "number" },
+        "description": { "type": "string", "minLength": 5, "maxLength": 3000 },
+        "category": { "type": "string", "enum": ["Messaging", "Tools", "Beta Releases", "Enterprise", "Add-ons", "Productivity"] },
+        "iconUrl": { "type": "string", "maxLength": 1000 },
+        "downloadUrl": { "type": "string", "maxLength": 2000 },
+        "storagePath": { "type": "string", "maxLength": 500 },
+        "fileSize": { "type": "number" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$", "maxLength": 64 },
+        "minAndroid": { "type": "string", "maxLength": 32 },
+        "targetArchitecture": { "type": "string", "maxLength": 32 },
+        "isPublished": { "type": "boolean" },
+        "downloadCount": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "releaseNotes": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["id", "name", "packageName", "version", "description", "category", "fileSize", "sha256", "isPublished", "downloadCount", "createdAt", "updatedAt"]
+    },
+    "DownloadEvent": {
+      "title": "DownloadEvent",
+      "description": "Atomic record for a completed APK download event with idempotency",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "appId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "appName": { "type": "string", "maxLength": 100 },
+        "appVersion": { "type": "string", "maxLength": 32 },
+        "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["completed", "failed", "cancelled"] },
+        "timestamp": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "deviceType": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "appId", "idempotencyKey", "status", "timestamp"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized administrators who can publish and manage APKs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["admin", "superadmin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "role", "createdAt"]
+    },
+    "AppVersion": {
+      "title": "AppVersion",
+      "description": "Version history entry for an application",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "appId": { "type": "string", "maxLength": 128 },
+        "version": { "type": "string", "maxLength": 32 },
+        "versionCode": { "type": "number" },
+        "downloadUrl": { "type": "string", "maxLength": 2000 },
+        "fileSize": { "type": "number" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$", "maxLength": 64 },
+        "releaseNotes": { "type": "string", "maxLength": 2000 },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "appId", "version", "fileSize", "sha256", "isPublished", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/apps/{appId}": {
+      "schema": "App",
+      "description": "Master catalog of Android APK files"
+    },
+    "/apps/{appId}/versions/{versionId}": {
+      "schema": "AppVersion",
+      "description": "Release history of APK versions"
+    },
+    "/download_events/{eventId}": {
+      "schema": "DownloadEvent",
+      "description": "Recorded download completions for atomic metrics"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminUser",
+      "description": "RBAC whitelist for verified application administrators"
+    }
+  }
+}
